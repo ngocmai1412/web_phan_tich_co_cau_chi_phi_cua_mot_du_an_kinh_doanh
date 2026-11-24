@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Phân tích cơ cấu chi phí dự án kinh doanh</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-4 md:p-8">
+  <div class="max-w-6xl mx-auto space-y-6">
+    <!-- Tiêu đề -->
+    <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div>
+        <h1 class="text-2xl md:text-3xl font-bold text-slate-900">Phân tích cơ cấu chi phí dự án</h1>
+        <p class="text-slate-600 text-sm mt-1">Theo dõi tỷ trọng, phân nhóm chi phí và cập nhật biểu đồ theo thời gian thực.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="exportCsvBtn" type="button"
+          class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-sm font-medium px-3.5 py-2 rounded-lg transition">
+          Xuất CSV
+        </button>
+        <button id="resetDemoBtn" type="button"
+          class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-medium px-3.5 py-2 rounded-lg transition">
+          Khôi phục mẫu
+        </button>
+      </div>
+    </header>
+
+    <!-- Thẻ KPI -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+        <div class="text-xs uppercase tracking-wider text-slate-500 font-medium">Tổng chi phí</div>
+        <div id="totalCost" class="text-2xl font-bold text-blue-600 mt-1.5">0 ₫</div>
+        <div id="itemCount" class="text-xs text-slate-400 mt-1">0 khoản mục</div>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+        <div class="text-xs uppercase tracking-wider text-slate-500 font-medium">Định phí / Biến phí</div>
+        <div id="fixedVarRatio" class="text-xl font-bold text-slate-800 mt-1.5">0% / 0%</div>
+        <div id="fixedVarAmount" class="text-xs text-slate-500 mt-1">0 ₫ / 0 ₫</div>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+        <div class="text-xs uppercase tracking-wider text-slate-500 font-medium">Đầu tư ban đầu</div>
+        <div id="capexAmount" class="text-xl font-bold text-amber-600 mt-1.5">0 ₫</div>
+        <div id="capexRatio" class="text-xs text-slate-500 mt-1">0% tổng chi phí</div>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+        <div class="text-xs uppercase tracking-wider text-slate-500 font-medium">Khoản chi lớn nhất</div>
+        <div id="topExpenseName" class="text-lg font-bold text-emerald-600 mt-1.5 truncate">Chưa có</div>
+        <div id="topExpenseMeta" class="text-xs text-slate-500 mt-1">0 ₫ (0%)</div>
+      </div>
+    </section>
+
+    <!-- Form nhập chi phí -->
+    <section class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+      <h2 class="text-sm font-semibold text-slate-700 mb-3">Thêm khoản chi mới</h2>
+      <form id="expenseForm" class="grid grid-cols-1 md:grid-cols-12 gap-3">
+        <input id="nameInput" type="text" placeholder="Tên khoản chi (VD: Thuê mặt bằng, Marketing...)" required
+          class="md:col-span-5 border border-slate-300 rounded-lg px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <select id="typeInput"
+          class="md:col-span-3 border border-slate-300 rounded-lg px-3.5 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="Định phí">Định phí</option>
+          <option value="Biến phí">Biến phí</option>
+          <option value="Đầu tư ban đầu">Đầu tư ban đầu</option>
+        </select>
+        <input id="amountInput" type="number" min="1000" step="1000" placeholder="Số tiền (VNĐ)" required
+          class="md:col-span-2 border border-slate-300 rounded-lg px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <button type="submit"
+          class="md:col-span-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-4 py-2 transition">
+          + Thêm
+        </button>
+      </form>
+    </section>
+
+    <!-- Biểu đồ -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+        <h2 class="font-semibold text-slate-800 mb-4">Tỷ trọng từng khoản chi</h2>
+        <div class="h-72 flex items-center justify-center">
+          <canvas id="itemDoughnutChart"></canvas>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+        <h2 class="font-semibold text-slate-800 mb-4">So sánh theo nhóm chi phí</h2>
+        <div class="h-72 flex items-center justify-center">
+          <canvas id="groupBarChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Danh sách chi tiết -->
+    <section class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="font-semibold text-slate-800">Bảng chi tiết cơ cấu chi phí</h2>
+        <select id="filterType" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white">
+          <option value="ALL">Tất cả nhóm</option>
+          <option value="Định phí">Định phí</option>
+          <option value="Biến phí">Biến phí</option>
+          <option value="Đầu tư ban đầu">Đầu tư ban đầu</option>
+        </select>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 text-slate-500">
+              <th class="py-2.5 px-3 font-medium">Khoản chi</th>
+              <th class="py-2.5 px-3 font-medium">Nhóm</th>
+              <th class="py-2.5 px-3 font-medium text-right">Số tiền</th>
+              <th class="py-2.5 px-3 font-medium text-right">Tỷ trọng</th>
+              <th class="py-2.5 px-3 font-medium text-right">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="expenseTableBody" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "project_cost_structure_v1";
+    const DEFAULT_EXPENSES = [
+      { id: 1, name: "Thuê mặt bằng & kho", type: "Định phí", amount: 18000000 },
+      { id: 2, name: "Lương nhân sự cố định", type: "Định phí", amount: 32000000 },
+      { id: 3, name: "Nguyên vật liệu & đóng gói", type: "Biến phí", amount: 45000000 },
+      { id: 4, name: "Vận chuyển & hoa hồng bán hàng", type: "Biến phí", amount: 15000000 },
+      { id: 5, name: "Máy móc, nội thất & setup", type: "Đầu tư ban đầu", amount: 80000000 }
+    ];
+
+    let expenses = loadExpenses();
+
+    function loadExpenses() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return [...DEFAULT_EXPENSES];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [...DEFAULT_EXPENSES];
+      } catch {
+        return [...DEFAULT_EXPENSES];
+      }
+    }
+
+    function saveExpenses() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+    }
+
+    const formatVND = (num) => new Intl.NumberFormat("vi-VN").format(Math.round(num)) + " ₫";
+
+    const palette = ["#2563eb", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899"];
+
+    const doughnutChart = new Chart(document.getElementById("itemDoughnutChart"), {
+      type: "doughnut",
+      data: {
+        labels: [],
+        datasets: [{ data: [], backgroundColor: palette, borderWidth: 1 }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: "bottom" } }
+      }
+    });
+
+    const barChart = new Chart(document.getElementById("groupBarChart"), {
+      type: "bar",
+      data: {
+        labels: ["Định phí", "Biến phí", "Đầu tư ban đầu"],
+        datasets: [{
+          label: "Số tiền (VNĐ)",
+          data: [0, 0, 0],
+          backgroundColor: ["#2563eb", "#10b981", "#f59e0b"],
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: (v) => new Intl.NumberFormat("vi-VN").format(v)
+            }
+          }
+        }
+      }
+    });
+
+    function render() {
+      saveExpenses();
+
+      const total = expenses.reduce((sum, item) => sum + item.amount, 0);
+      const fixed = expenses.filter(i => i.type === "Định phí").reduce((s, i) => s + i.amount, 0);
+      const variable = expenses.filter(i => i.type === "Biến phí").reduce((s, i) => s + i.amount, 0);
+      const capex = expenses.filter(i => i.type === "Đầu tư ban đầu").reduce((s, i) => s + i.amount, 0);
+
+      document.getElementById("totalCost").textContent = formatVND(total);
+      document.getElementById("itemCount").textContent = `${expenses.length} khoản mục`;
+
+      const fixedPct = total ? Math.round((fixed / total) * 100) : 0;
+      const varPct = total ? Math.round((variable / total) * 100) : 0;
+      document.getElementById("fixedVarRatio").textContent = `${fixedPct}% / ${varPct}%`;
+      document.getElementById("fixedVarAmount").textContent = `${formatVND(fixed)} / ${formatVND(variable)}`;
+
+      const capexPct = total ? ((capex / total) * 100).toFixed(1) : 0;
+      document.getElementById("capexAmount").textContent = formatVND(capex);
+      document.getElementById("capexRatio").textContent = `${capexPct}% tổng chi phí`;
+
+      const sorted = [...expenses].sort((a, b) => b.amount - a.amount);
+      if (sorted[0]) {
+        const topPct = total ? ((sorted[0].amount / total) * 100).toFixed(1) : 0;
+        document.getElementById("topExpenseName").textContent = sorted[0].name;
+        document.getElementById("topExpenseMeta").textContent = `${formatVND(sorted[0].amount)} (${topPct}%)`;
+      } else {
+        document.getElementById("topExpenseName").textContent = "Chưa có";
+        document.getElementById("topExpenseMeta").textContent = "0 ₫ (0%)";
+      }
+
+      const filterVal = document.getElementById("filterType").value;
+      const visibleItems = filterVal === "ALL" ? expenses : expenses.filter(i => i.type === filterVal);
+
+      const tbody = document.getElementById("expenseTableBody");
+      if (!visibleItems.length) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-400">Không có khoản chi nào trong nhóm này.</td></tr>`;
+      } else {
+        tbody.innerHTML = visibleItems.map(item => {
+          const pct = total ? ((item.amount / total) * 100).toFixed(1) : "0.0";
+          return `
+            <tr class="hover:bg-slate-50">
+              <td class="py-3 px-3 font-medium text-slate-900">${escapeHtml(item.name)}</td>
+              <td class="py-3 px-3 text-slate-600">${escapeHtml(item.type)}</td>
+              <td class="py-3 px-3 text-right font-semibold text-slate-800">${formatVND(item.amount)}</td>
+              <td class="py-3 px-3 text-right text-slate-600">${pct}%</td>
+              <td class="py-3 px-3 text-right">
+                <button onclick="deleteExpense(${item.id})" class="text-red-600 hover:underline text-xs font-medium">Xóa</button>
+              </td>
+            </tr>
+          `;
+        }).join("");
+      }
+
+      doughnutChart.data.labels = expenses.map(i => i.name);
+      doughnutChart.data.datasets[0].data = expenses.map(i => i.amount);
+      doughnutChart.update();
+
+      barChart.data.datasets[0].data = [fixed, variable, capex];
+      barChart.update();
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, m => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[m]));
+    }
+
+    window.deleteExpense = (id) => {
+      expenses = expenses.filter(item => item.id !== id);
+      render();
+    };
+
+    document.getElementById("expenseForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = document.getElementById("nameInput").value.trim();
+      const type = document.getElementById("typeInput").value;
+      const amount = Number(document.getElementById("amountInput").value);
+      if (!name || !Number.isFinite(amount) || amount <= 0) return;
+
+      expenses.push({ id: Date.now(), name, type, amount });
+      e.target.reset();
+      render();
+    });
+
+    document.getElementById("filterType").addEventListener("change", render);
+
+    document.getElementById("resetDemoBtn").addEventListener("click", () => {
+      expenses = [...DEFAULT_EXPENSES];
+      render();
+    });
+
+    document.getElementById("exportCsvBtn").addEventListener("click", () => {
+      const total = expenses.reduce((sum, item) => sum + item.amount, 0);
+      const rows = [
+        ["Khoan chi", "Nhom", "So tien (VND)", "Ty trong (%)"],
+        ...expenses.map(i => [
+          `"${i.name.replace(/"/g, '""')}"`,
+          `"${i.type}"`,
+          i.amount,
+          total ? ((i.amount / total) * 100).toFixed(2) : "0.00"
+        ])
+      ];
+      const csvContent = "\uFEFF" + rows.map(r => r.join(",")).join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "co-cau-chi-phi-du-an.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    render();
+  </script>
+</body>
+</html>
